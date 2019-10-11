@@ -6,16 +6,22 @@ import {
   publishReplay,
   multicast,
   refCount,
-  materialize
+  materialize,
+  take
 } from "rxjs/operators";
 
+/* 
+  Replay custom operator
+
+  circumvents rxjs < 6.4 shareReplay(1) behaviour - memory leak (ref: https://blog.strongbrew.io/share-replay-issue/)
+ */
 const replay = () =>
   pipe(
     multicast(() => new ReplaySubject(1)),
     refCount()
   );
 
-const source = interval(1000).pipe(
+const source$ = interval(1000).pipe(
   tap(i => console.log("tick")),
   // materialize(),
   // map(({ kind, value }) => ({ kind, value })),
@@ -26,14 +32,13 @@ const source = interval(1000).pipe(
   replay()
 );
 
-const a$ = source.pipe(
+const modified$ = source$.pipe(
   tap(i => console.log("A-sub", i)),
   replay()
 );
 
-const sub1 = a$.pipe(tap(i => console.log("B-sub", i))).subscribe();
-const sub2 = a$.pipe(tap(i => console.log("C-sub", i))).subscribe();
-// const sub3 = source.pipe(tap(i => console.log("sub2", i))).subscribe();
+const sub1 = modified$.pipe(tap(i => console.log("B-sub", i))).subscribe();
+const sub2 = modified$.pipe(tap(i => console.log("C-sub", i))).subscribe();
 
 setTimeout(() => {
   sub1.unsubscribe();
@@ -43,12 +48,11 @@ setTimeout(() => {
   sub2.unsubscribe();
 }, 6000);
 
-// setTimeout(() => {
-//   sub3.unsubscribe();
-// }, 9000);
-
 setTimeout(() => {
-  const sub3 = source.pipe(tap(i => console.log("sub", i))).subscribe();
-
-  setTimeout(() => sub3.unsubscribe(), 4000);
+  source$
+    .pipe(
+      tap(i => console.log("D-sub", i)),
+      take(1)
+    )
+    .subscribe();
 }, 10000);
